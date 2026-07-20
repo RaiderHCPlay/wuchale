@@ -45,6 +45,7 @@ export function detectProject() {
     const result: DetectProjectResult = {
         projectKind: 'vanilla',
         detectedPackages: [],
+        packageKinds: [],
         hasViteConfig: false,
         hasWuchaleConfig: false,
         isTypeScript: false,
@@ -62,6 +63,7 @@ export function detectProject() {
         if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
             result.projectKind = fm.kind
             detectedPackages.push(fm.package)
+            result.packageKinds.push(fm.kind)
             break
         }
     }
@@ -69,11 +71,14 @@ export function detectProject() {
     for (const fm of frameworks) {
         if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
             detectedPackages.push(fm.package)
+            result.packageKinds.push(fm.kind)
             if (result.projectKind === 'vanilla') {
                 result.projectKind = fm.kind
             }
         }
     }
+
+    if (result.packageKinds.length === 0) result.packageKinds.push('vanilla')
 
     result.detectedPackages = detectedPackages
 
