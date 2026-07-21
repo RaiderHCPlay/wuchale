@@ -3,6 +3,7 @@ export type ProjectKind = 'react' | 'solid-js' | 'svelte' | 'sveltekit' | 'astro
 export interface DetectProjectResult {
     projectKind: ProjectKind
     detectedPackages: string[]
+    adapters: string[]
     packageKinds: ProjectKind[]
     hasViteConfig: boolean
     hasWuchaleConfig: boolean
@@ -17,4 +18,9 @@ export interface AdapterConfig {
 export interface PairedAdapterConfig {
     import: { name: string; lib: string }
     content: string
+}
+
+export interface PackageManager {
+    name: string
+    install: string
 }

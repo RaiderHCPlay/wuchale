@@ -45,6 +45,7 @@ export function detectProject() {
     const result: DetectProjectResult = {
         projectKind: 'vanilla',
         detectedPackages: [],
+        adapters: [],
         packageKinds: [],
         hasViteConfig: false,
         hasWuchaleConfig: false,
@@ -63,6 +64,7 @@ export function detectProject() {
         if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
             result.projectKind = fm.kind
             detectedPackages.push(fm.package)
+            result.adapters.push(fm.adapter)
             result.packageKinds.push(fm.kind)
             break
         }
@@ -72,6 +74,9 @@ export function detectProject() {
         if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
             detectedPackages.push(fm.package)
             result.packageKinds.push(fm.kind)
+            if (!result.adapters.includes(fm.adapter)) {
+                result.adapters.push(fm.adapter)
+            }
             if (result.projectKind === 'vanilla') {
                 result.projectKind = fm.kind
             }
