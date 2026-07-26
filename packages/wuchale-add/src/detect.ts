@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'node:fs'
 import type { DetectProjectResult, ProjectKind } from './types.js'
 
 const metaFrameworks = [
