@@ -1,14 +1,9 @@
 import readline from 'node:readline'
-import type { ProjectKind } from './types.js'
-
-type MultiboxPromptOptions = {
-    name: string
-    checked: boolean
-}
+import type { MultiboxPromptOptions, ProjectKind } from './types.js'
 
 const displayName = new Intl.DisplayNames(['en'], { type: 'language' })
 
-export function adapterMultiboxPrompt(adapters: ProjectKind[]) {
+export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<MultiboxPromptOptions[]> {
     return new Promise(resolve => {
         const options: MultiboxPromptOptions[] = adapters.map(adapter => ({
             name: adapter.charAt(0).toUpperCase() + adapter.slice(1),
@@ -73,7 +68,7 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]) {
     })
 }
 
-export function languagesPrompt() {
+export function languagesPrompt(): Promise<string[]> {
     return new Promise(resolve => {
         let input = ''
 
@@ -137,7 +132,7 @@ export function languagesPrompt() {
     })
 }
 
-export function confirmPrompt(text: string) {
+export function confirmPrompt(text: string): Promise<boolean> {
     return new Promise(resolve => {
         let input = ''
 

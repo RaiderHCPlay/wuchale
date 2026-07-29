@@ -24,3 +24,8 @@ export interface PackageManager {
     name: string
     install: string
 }
+
+export type MultiboxPromptOptions = {
+    name: string
+    checked: boolean
+}
