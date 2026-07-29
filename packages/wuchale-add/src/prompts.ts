@@ -1,3 +1,4 @@
+import { read } from 'node:fs'
 import readline from 'node:readline'
 import type { ProjectKind } from './types.js'
 
@@ -124,6 +125,67 @@ export function languagesPrompt() {
                     input += key
             }
 
+            render()
+        }
+
+        process.stdin.setRawMode(true)
+        process.stdin.resume()
+        process.stdin.setEncoding('utf8')
+
+        render()
+
+        process.stdin.on('data', onData)
+    })
+}
+
+export function confirmPrompt(text: string) {
+    return new Promise(resolve => {
+        let input = ''
+
+        const render = (error = '') => {
+            readline.cursorTo(process.stdout, 0)
+            readline.clearScreenDown(process.stdout)
+
+            process.stdout.write(`${text}(Y/N): ${input}\n`)
+            process.stdout.write(`${error}`)
+
+            readline.moveCursor(process.stdout, 0, -1)
+            readline.cursorTo(process.stdout, text.length + input.length + 7)
+            process.stdin.write('\x1b[s')
+        }
+
+        const cleanup = () => {
+            process.stdin.setRawMode(false)
+            process.stdin.pause()
+            process.stdin.off('data', onData)
+        }
+
+        const onData = (key: string) => {
+            switch (key) {
+                case '\u0003':
+                    cleanup()
+                    process.stdout.write('Operation cancelled\n')
+                    return process.exit(0)
+                case '\r': {
+                    const isValid = input.toLowerCase() === 'y' || input.toLowerCase() === 'n' ? true : false
+                    if (!isValid) {
+                        render('Not valid input')
+                        return
+                    }
+
+                    if (input.toLowerCase() === 'y') resolve(true)
+                    else resolve(false)
+                    cleanup()
+                    return
+                }
+
+                case '\u007f':
+                    input = input.slice(0, -1)
+                    break
+
+                default:
+                    input += key
+            }
             render()
         }
 
