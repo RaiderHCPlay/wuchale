@@ -1,4 +1,3 @@
-import { read } from 'node:fs'
 import readline from 'node:readline'
 import type { ProjectKind } from './types.js'
 
@@ -167,7 +166,7 @@ export function confirmPrompt(text: string) {
                     process.stdout.write('Operation cancelled\n')
                     return process.exit(0)
                 case '\r': {
-                    const isValid = input.toLowerCase() === 'y' || input.toLowerCase() === 'n' ? true : false
+                    const isValid = !!(input.toLowerCase() === 'y' || input.toLowerCase() === 'n')
                     if (!isValid) {
                         render('Not valid input')
                         return
