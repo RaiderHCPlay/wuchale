@@ -1,19 +1,35 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { tsPlugin } from '@sveltejs/acorn-typescript'
-import { type Node, Parser, type Program } from 'acorn'
+import type { ImportDeclaration, Node, Property } from 'acorn'
+import { Parser } from 'acorn'
 import MagicString from 'magic-string'
 import type { DetectProjectResult } from './types.js'
 
 const parser = Parser.extend(tsPlugin())
-let hasImport = false
-const hasPlugin = { exist: false, pos: 0 }
+
+type ConfigAnalysis = {
+    hasImport: boolean
+    hasPlugin: boolean
+    pluginPosition: number | null
+}
+
+const analysis: ConfigAnalysis = {
+    hasImport: false,
+    hasPlugin: false,
+    pluginPosition: null,
+}
 
 export function writeViteConfig(project: DetectProjectResult) {
     if (!project.hasViteConfig) {
         return
     }
 
-    const viteFileExtension = checkViteConfigFile()
+    analysis.hasImport = false
+    analysis.hasPlugin = false
+    analysis.pluginPosition = null
+
+    const viteFileExtension = getViteConfigExtension()
+    if (!viteFileExtension) return
 
     const content = readFileSync(`./vite.config.${viteFileExtension}`, 'utf8')
     const ast = parser.parse(content, {
@@ -27,59 +43,80 @@ export function writeViteConfig(project: DetectProjectResult) {
         walkNodes(node)
     }
 
-    if (!hasImport) {
+    if (!analysis.hasImport) {
         s.prepend("import { wuchale } from 'wuchale/vite'\n")
     }
 
-    if (!hasPlugin.exist) {
-        s.appendLeft(hasPlugin.pos, 'wuchale(), ')
+    if (!analysis.hasPlugin && analysis.pluginPosition !== null) {
+        s.appendLeft(analysis.pluginPosition, 'wuchale(), ')
     }
 
     const result = s.toString()
-    writeFileSync(`./vite.config.${viteFileExtension}`, result)
+
+    if (result !== content) {
+        writeFileSync(`./vite.config.${viteFileExtension}`, result)
+    }
 }
 
-function checkViteConfigFile(): string {
+function getViteConfigExtension(): string | undefined {
     if (existsSync('./vite.config.ts')) return 'ts'
-    else return 'js'
+    if (existsSync('./vite.config.js')) return 'js'
+
+    return undefined
 }
 
 function walkNodes(node: Node) {
-    for (const [key, value] of Object.entries(node)) {
-        if (Array.isArray(value)) {
-            for (const child of value) {
-                walkNodes(child)
-            }
-        } else if (typeof value === 'object' && value !== null) {
-            walkNodes(value)
-        }
+    if (node.type === 'Property') {
+        const property = node as Property
 
-        if (node.type === 'Property') {
-            const property = node as any
-            if (property.key.name === 'plugins') {
-                const arr = property.value
-                for (const element of arr.elements) {
-                    if (element.callee.name === 'wuchale') {
-                        hasPlugin.exist = true
-                    }
-                }
-                if (!hasPlugin.exist) {
-                    hasPlugin.pos = arr.start + 1
+        if (
+            property.value.type === 'ArrayExpression' &&
+            property.key.type === 'Identifier' &&
+            property.key.name === 'plugins'
+        ) {
+            const arr = property.value
+            for (const element of arr.elements) {
+                if (
+                    element?.type === 'CallExpression' &&
+                    element.callee.type === 'Identifier' &&
+                    element.callee.name === 'wuchale'
+                ) {
+                    analysis.hasPlugin = true
                 }
             }
-        }
-
-        if (node.type === 'ImportDeclaration') {
-            const importNode = node as any
-            for (const spec of importNode.specifiers) {
-                if (spec.type === 'ImportSpecifier') {
-                    if (spec.imported.type === 'Identifier') {
-                        if (spec.imported.name === 'wuchale') {
-                            hasImport = true
-                        }
-                    }
-                }
+            if (!analysis.hasPlugin) {
+                analysis.pluginPosition = arr.start + 1
             }
         }
     }
+
+    if (node.type === 'ImportDeclaration') {
+        const importNode = node as ImportDeclaration
+        for (const spec of importNode.specifiers) {
+            if (
+                spec.type === 'ImportSpecifier' &&
+                spec.imported.type === 'Identifier' &&
+                importNode.source.value === 'wuchale/vite' &&
+                spec.imported.name === 'wuchale'
+            ) {
+                analysis.hasImport = true
+            }
+        }
+    }
+
+    for (const value of Object.values(node)) {
+        if (Array.isArray(value)) {
+            for (const child of value) {
+                if (isNode(child)) {
+                    walkNodes(child)
+                }
+            }
+        } else if (isNode(value)) {
+            walkNodes(value)
+        }
+    }
+}
+
+function isNode(value: unknown): value is Node {
+    return typeof value === 'object' && value !== null && 'type' in value && typeof value.type === 'string'
 }
