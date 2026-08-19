@@ -29,3 +29,12 @@ export type MultiboxPromptOptions = {
     name: string
     checked: boolean
 }
+
+interface ScaffoldContext {
+    project: DetectProjectResult
+    locales: string[]
+}
+
+export interface ScaffoldModule {
+    scaffold: (ctx: ScaffoldContext) => Promise<void>
+}
