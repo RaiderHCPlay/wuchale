@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import type { AdapterConfig, DetectProjectResult, PairedAdapterConfig, ProjectKind } from './types.js'
 
 export function writeWuchaleConfig(project: DetectProjectResult, locales: string[]) {

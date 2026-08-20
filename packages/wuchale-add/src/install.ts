@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import type { DetectProjectResult, MultiboxPromptOptions, PackageManager } from './types.js'
+import type { PackageManager } from './types.js'
 
 export function installDependencies(adapters: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
