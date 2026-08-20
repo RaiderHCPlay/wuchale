@@ -21,21 +21,30 @@ if (!project) {
 const locales = await languagesPrompt()
 
 const confirmedAdapters: MultiboxPromptOptions[] = await adapterMultiboxPrompt(project.packageKinds)
-const adapters = []
-for (const adapter of confirmedAdapters) {
-    adapters.push(adapter.name)
-}
 
-const shouldInstall = await confirmPrompt('Install selected dependencies?')
+const zippedAdapters = project.adapters.map((adapter, index) => ({
+    adapter: adapter,
+    kind: project.packageKinds[index],
+}))
+
+const adapters = confirmedAdapters
+    .filter(adapt => adapt.checked)
+    .map(adapt => zippedAdapters.find(zipAdapt => zipAdapt.kind === adapt.name.toLowerCase())!.adapter)
+
+const shouldInstall = await confirmPrompt('Install selected dependencies + wuchale package?')
 
 if (shouldInstall) {
-    try {
-        await installDependencies(adapters)
-        console.log('Dependencies installed')
-    } catch (error) {
-        console.error(`${error} Try manually:`)
-        const pkgMgr: PackageManager = detectPackageManager()
-        console.error(`\t${pkgMgr.name} ${pkgMgr.install} wuchale ${adapters.join(' ')}`)
+    if (adapters.length === 0) {
+        console.log('No dependencies to install')
+    } else {
+        try {
+            await installDependencies(adapters)
+            console.log('Dependencies installed')
+        } catch (error) {
+            console.error(`${error} Try manually:`)
+            const pkgMgr: PackageManager = detectPackageManager()
+            console.error(`\t${pkgMgr.name} ${pkgMgr.install} wuchale ${adapters.join(' ')}`)
+        }
     }
 }
 

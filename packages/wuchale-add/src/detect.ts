@@ -65,7 +65,9 @@ export function detectProject() {
             result.projectKind = fm.kind
             detectedPackages.push(fm.package)
             result.adapters.push(fm.adapter)
-            result.packageKinds.push(fm.kind)
+            if (fm.kind !== 'sveltekit') {
+                result.packageKinds.push(fm.kind)
+            }
             break
         }
     }
