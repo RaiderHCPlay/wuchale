@@ -17,10 +17,11 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
             if (rendered) {
                 process.stdout.write('\x1b[u')
                 readline.clearScreenDown(process.stdout)
+            } else {
+                process.stdout.write('\x1b[s')
+                rendered = true
             }
 
-            rendered = true
-            process.stdout.write('\x1b[s')
             process.stdout.write('\x1b[?25l')
             process.stdout.write('Detected adapters to install (Space = check/uncheck, Enter = accept)\n')
 
@@ -42,6 +43,7 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
         const onData = (key: string) => {
             switch (key) {
                 case '\u0003':
+                    cleanup()
                     process.stdin.write('Operation cancelled\n')
                     return process.exit(0)
 
@@ -81,16 +83,17 @@ export function languagesPrompt(): Promise<string[]> {
         const render = (error = '') => {
             if (rendered) {
                 process.stdout.write('\x1b[u')
+                readline.moveCursor(process.stdout, 0, -1)
                 readline.clearScreenDown(process.stdout)
             }
 
             rendered = true
-            process.stdout.write('\x1b[s')
 
             process.stdout.write('Which languages do you want to support? (e.g. en,zh-TW)\n')
-            process.stdout.write(`> ${input}\n`)
-            if (error) process.stdout.write(`${error}`)
-            readline.moveCursor(process.stdout, 0, -1)
+            process.stdout.write('\x1b[s')
+
+            process.stdout.write(`> ${input}`)
+            if (error) process.stdout.write(`\n${error}`)
             readline.cursorTo(process.stdout, input.length + 2)
         }
 
@@ -148,13 +151,15 @@ export function confirmPrompt(text: string): Promise<boolean> {
         const render = (error = '') => {
             if (rendered) {
                 process.stdout.write('\x1b[u')
+                readline.moveCursor(process.stdout, 0, -1)
+
                 readline.clearScreenDown(process.stdout)
             }
-
             rendered = true
-            process.stdout.write('\x1b[s')
 
             process.stdout.write(`${text}(Y/N): ${input}\n`)
+            process.stdout.write('\x1b[s')
+
             if (error) process.stdout.write(`${error}`)
 
             readline.moveCursor(process.stdout, 0, -1)
@@ -171,7 +176,7 @@ export function confirmPrompt(text: string): Promise<boolean> {
             switch (key) {
                 case '\u0003':
                     cleanup()
-                    process.stdout.write('Operation cancelled\n')
+                    process.stdout.write('\nOperation cancelled\n')
                     return process.exit(0)
                 case '\r': {
                     const isValid = !!(input.toLowerCase() === 'y' || input.toLowerCase() === 'n')
