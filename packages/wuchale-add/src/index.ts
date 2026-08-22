@@ -27,9 +27,13 @@ const zippedAdapters = project.adapters.map((adapter, index) => ({
     kind: project.packageKinds[index],
 }))
 
-const adapters = confirmedAdapters
-    .filter(adapt => adapt.checked)
-    .map(adapt => zippedAdapters.find(zipAdapt => zipAdapt.kind === adapt.name.toLowerCase())!.adapter)
+const adapters = [
+    ...new Set(
+        confirmedAdapters
+            .filter(adapt => adapt.checked)
+            .map(adapt => zippedAdapters.find(zipAdapt => zipAdapt.kind === adapt.name.toLowerCase())!.adapter),
+    ),
+]
 
 const shouldInstall = await confirmPrompt('Install selected dependencies + wuchale package?')
 

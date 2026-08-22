@@ -9,13 +9,19 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
             name: adapter.charAt(0).toUpperCase() + adapter.slice(1),
             checked: true,
         }))
-        const lines = options.length + 1
+
+        let rendered = false
+        let cursor = 0
 
         const render = () => {
-            readline.moveCursor(process.stdout, 0, -lines)
-            readline.cursorTo(process.stdout, 0)
-            readline.clearScreenDown(process.stdout)
+            if (rendered) {
+                process.stdout.write('\x1b[u')
+                readline.clearScreenDown(process.stdout)
+            }
 
+            rendered = true
+            process.stdout.write('\x1b[s')
+            process.stdout.write('\x1b[?25l')
             process.stdout.write('Detected adapters to install (Space = check/uncheck, Enter = accept)\n')
 
             options.forEach((option: MultiboxPromptOptions, index) => {
@@ -30,6 +36,7 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
             process.stdin.setRawMode(false)
             process.stdin.pause()
             process.stdin.off('data', onData)
+            process.stdout.write('\x1b[?25h')
         }
 
         const onData = (key: string) => {
@@ -57,8 +64,6 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
             render()
         }
 
-        let cursor = 0
-
         process.stdin.setRawMode(true)
         process.stdin.resume()
         process.stdin.setEncoding('utf8')
@@ -71,19 +76,22 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
 export function languagesPrompt(): Promise<string[]> {
     return new Promise(resolve => {
         let input = ''
+        let rendered = false
 
         const render = (error = '') => {
-            readline.cursorTo(process.stdout, 0)
-            readline.clearScreenDown(process.stdout)
-
-            const lines = ['Which languages do you want to support? (e.g. en,zh-TW)\n', `> ${input}\n`, error]
-            for (const line of lines) {
-                process.stdout.write(`${line}`)
+            if (rendered) {
+                process.stdout.write('\x1b[u')
+                readline.clearScreenDown(process.stdout)
             }
 
-            readline.moveCursor(process.stdout, 0, -2)
-            readline.cursorTo(process.stdout, input.length + 2)
+            rendered = true
             process.stdout.write('\x1b[s')
+
+            process.stdout.write('Which languages do you want to support? (e.g. en,zh-TW)\n')
+            process.stdout.write(`> ${input}\n`)
+            if (error) process.stdout.write(`${error}`)
+            readline.moveCursor(process.stdout, 0, -1)
+            readline.cursorTo(process.stdout, input.length + 2)
         }
 
         const cleanup = () => {
@@ -135,17 +143,22 @@ export function languagesPrompt(): Promise<string[]> {
 export function confirmPrompt(text: string): Promise<boolean> {
     return new Promise(resolve => {
         let input = ''
+        let rendered = false
 
         const render = (error = '') => {
-            readline.cursorTo(process.stdout, 0)
-            readline.clearScreenDown(process.stdout)
+            if (rendered) {
+                process.stdout.write('\x1b[u')
+                readline.clearScreenDown(process.stdout)
+            }
+
+            rendered = true
+            process.stdout.write('\x1b[s')
 
             process.stdout.write(`${text}(Y/N): ${input}\n`)
-            process.stdout.write(`${error}`)
+            if (error) process.stdout.write(`${error}`)
 
             readline.moveCursor(process.stdout, 0, -1)
             readline.cursorTo(process.stdout, text.length + input.length + 7)
-            process.stdin.write('\x1b[s')
         }
 
         const cleanup = () => {
@@ -169,6 +182,7 @@ export function confirmPrompt(text: string): Promise<boolean> {
 
                     if (input.toLowerCase() === 'y') resolve(true)
                     else resolve(false)
+                    process.stdout.write('\n')
                     cleanup()
                     return
                 }
