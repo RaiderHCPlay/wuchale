@@ -15,16 +15,16 @@ export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<Multibox
 
         const render = () => {
             if (rendered) {
-                process.stdout.write('\x1b[u')
+                const lines = options.length + 1
+                readline.moveCursor(process.stdout, 0, -lines)
                 readline.clearScreenDown(process.stdout)
             } else {
-                process.stdout.write('\x1b[s')
                 rendered = true
             }
 
             process.stdout.write('\x1b[?25l')
-            process.stdout.write('Detected adapters to install (Space = check/uncheck, Enter = accept)\n')
 
+            process.stdout.write('Detected adapters to install (Space = check/uncheck, Enter = accept)\n')
             options.forEach((option: MultiboxPromptOptions, index) => {
                 const pointer = index === cursor ? '<' : ''
                 const checked = option.checked ? '[x]' : '[]'
