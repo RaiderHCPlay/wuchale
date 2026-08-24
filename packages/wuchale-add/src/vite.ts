@@ -40,6 +40,7 @@ export function writeViteConfig(project: DetectProjectResult) {
     const s = new MagicString(content)
 
     for (const node of ast.body) {
+        if (analysis.hasImport && analysis.hasPlugin) break
         walkNodes(node)
     }
 
@@ -66,6 +67,7 @@ function getViteConfigExtension(): string | undefined {
 }
 
 function walkNodes(node: Node) {
+    if (analysis.hasImport && analysis.hasPlugin) return
     if (node.type === 'Property') {
         const property = node as Property
 
@@ -82,6 +84,7 @@ function walkNodes(node: Node) {
                     element.callee.name === 'wuchale'
                 ) {
                     analysis.hasPlugin = true
+                    break
                 }
             }
             if (!analysis.hasPlugin) {
@@ -100,6 +103,7 @@ function walkNodes(node: Node) {
                 spec.imported.name === 'wuchale'
             ) {
                 analysis.hasImport = true
+                break
             }
         }
     }
