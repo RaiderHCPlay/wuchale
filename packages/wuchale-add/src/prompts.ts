@@ -3,6 +3,21 @@ import type { MultiboxPromptOptions, ProjectPackage } from './types.js'
 
 const displayName = new Intl.DisplayNames(['en'], { type: 'language' })
 
+const KEY = {
+    ENTER: '\r',
+    CTRL_C: '\u0003',
+    ARROW_UP: '\u001b[A',
+    ARROW_DOWN: '\u001b[B',
+    BACKSPACE: '\u007f',
+}
+
+const ANSI = {
+    HIDE_CURSOR: '\x1b[?25l',
+    SHOW_CURSOR: '\x1b[?25h',
+    RESTORE_CURSOR: '\x1b[u',
+    SAVE_CURSOR: '\x1b[s',
+}
+
 export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<MultiboxPromptOptions[]> {
     return new Promise(resolve => {
         const options: MultiboxPromptOptions[] = packages.map(pkg => ({
@@ -10,6 +25,11 @@ export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<Multi
             adapter: pkg.adapter,
             checked: true,
         }))
+
+        if (options.length === 0) {
+            resolve([])
+            return
+        }
 
         let rendered = false
         let cursor = 0
@@ -23,10 +43,10 @@ export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<Multi
                 rendered = true
             }
 
-            process.stdout.write('\x1b[?25l')
+            process.stdout.write(ANSI.HIDE_CURSOR)
 
             process.stdout.write('Detected adapters to install (Space = check/uncheck, Enter = accept)\n')
-            options.forEach((option: MultiboxPromptOptions, index) => {
+            options.forEach((option, index) => {
                 const pointer = index === cursor ? '<' : ''
                 const checked = option.checked ? '[x]' : '[]'
 
@@ -38,17 +58,17 @@ export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<Multi
             process.stdin.setRawMode(false)
             process.stdin.pause()
             process.stdin.off('data', onData)
-            process.stdout.write('\x1b[?25h')
+            process.stdout.write(ANSI.SHOW_CURSOR)
         }
 
         const onData = (key: string) => {
             switch (key) {
-                case '\u0003':
+                case KEY.CTRL_C:
                     cleanup()
-                    process.stdin.write('Operation cancelled\n')
+                    process.stdout.write('Operation cancelled\n')
                     return process.exit(0)
 
-                case '\r':
+                case KEY.ENTER:
                     cleanup()
                     resolve(options)
                     return
@@ -56,11 +76,11 @@ export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<Multi
                 case ' ':
                     options[cursor]!.checked = !options[cursor]?.checked
                     break
-                case '\u001b[A':
+                case KEY.ARROW_UP:
                     cursor = (cursor - 1 + options.length) % options.length
                     break
 
-                case '\u001b[B':
+                case KEY.ARROW_DOWN:
                     cursor = (cursor + 1) % options.length
                     break
             }
@@ -83,7 +103,7 @@ export function languagesPrompt(): Promise<string[]> {
 
         const render = (error = '') => {
             if (rendered) {
-                process.stdout.write('\x1b[u')
+                process.stdout.write(ANSI.RESTORE_CURSOR)
                 readline.moveCursor(process.stdout, 0, -1)
                 readline.clearScreenDown(process.stdout)
             }
@@ -91,7 +111,7 @@ export function languagesPrompt(): Promise<string[]> {
             rendered = true
 
             process.stdout.write('Which languages do you want to support? (e.g. en,zh-TW)\n')
-            process.stdout.write('\x1b[s')
+            process.stdout.write(ANSI.SAVE_CURSOR)
 
             process.stdout.write(`> ${input}`)
             if (error) process.stdout.write(`\n${error}`)
@@ -106,12 +126,12 @@ export function languagesPrompt(): Promise<string[]> {
 
         const onData = (key: string) => {
             switch (key) {
-                case '\u0003':
+                case KEY.CTRL_C:
                     cleanup()
                     process.stdout.write('\nOperation cancelled\n')
                     return process.exit(0)
 
-                case '\r': {
+                case KEY.ENTER: {
                     const { invalidTags, validTags } = parseLanguageInput(input)
 
                     if (invalidTags.length === 0) {
@@ -124,7 +144,7 @@ export function languagesPrompt(): Promise<string[]> {
                     render(checkInvalidTags(input) ?? undefined)
                     return
                 }
-                case '\u007f':
+                case KEY.BACKSPACE:
                     input = input.slice(0, -1)
                     break
                 default:
@@ -151,7 +171,7 @@ export function confirmPrompt(text: string): Promise<boolean> {
 
         const render = (error = '') => {
             if (rendered) {
-                process.stdout.write('\x1b[u')
+                process.stdout.write(ANSI.RESTORE_CURSOR)
                 readline.moveCursor(process.stdout, 0, -1)
 
                 readline.clearScreenDown(process.stdout)
@@ -159,7 +179,7 @@ export function confirmPrompt(text: string): Promise<boolean> {
             rendered = true
 
             process.stdout.write(`${text}(Y/N): ${input}\n`)
-            process.stdout.write('\x1b[s')
+            process.stdout.write(ANSI.SAVE_CURSOR)
 
             if (error) process.stdout.write(`${error}`)
 
@@ -175,25 +195,25 @@ export function confirmPrompt(text: string): Promise<boolean> {
 
         const onData = (key: string) => {
             switch (key) {
-                case '\u0003':
+                case KEY.CTRL_C:
                     cleanup()
                     process.stdout.write('\nOperation cancelled\n')
                     return process.exit(0)
-                case '\r': {
-                    const isValid = !!(input.toLowerCase() === 'y' || input.toLowerCase() === 'n')
-                    if (!isValid) {
+                case KEY.ENTER: {
+                    const answer = input.toLowerCase()
+
+                    if (answer !== 'y' && answer !== 'n') {
                         render('Not valid input')
                         return
                     }
 
-                    if (input.toLowerCase() === 'y') resolve(true)
-                    else resolve(false)
+                    resolve(answer === 'y')
                     process.stdout.write('\n')
                     cleanup()
                     return
                 }
 
-                case '\u007f':
+                case KEY.BACKSPACE:
                     input = input.slice(0, -1)
                     break
 
