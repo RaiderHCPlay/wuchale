@@ -1,13 +1,18 @@
 export type ProjectKind = 'react' | 'solid-js' | 'svelte' | 'sveltekit' | 'astro' | 'vanilla'
+export type ChoosablePackages = 'react' | 'solid-js' | 'svelte' | 'astro'
 
 export interface DetectProjectResult {
-    projectKind: ProjectKind
-    detectedPackages: string[]
-    adapters: string[]
-    packageKinds: ProjectKind[]
+    packages: ProjectPackage[]
+    packageOverrides: Partial<Record<ProjectKind, ProjectKind>>
     hasViteConfig: boolean
     hasWuchaleConfig: boolean
     isTypeScript: boolean
+}
+
+export type ProjectPackage = {
+    kind: ProjectKind
+    adapter: string
+    choosable: boolean
 }
 
 export interface AdapterConfig {
@@ -27,6 +32,7 @@ export interface PackageManager {
 
 export type MultiboxPromptOptions = {
     name: string
+    adapter: string
     checked: boolean
 }
 
@@ -37,4 +43,12 @@ interface ScaffoldContext {
 
 export interface ScaffoldModule {
     scaffold: (ctx: ScaffoldContext) => Promise<void>
+}
+
+export interface FrameworkDefinition {
+    package: string
+    adapter: string
+    kind: ProjectKind
+    choosable: boolean
+    overrides?: ProjectKind[]
 }

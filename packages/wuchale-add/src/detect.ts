@@ -1,36 +1,40 @@
 import { existsSync, readFileSync } from 'node:fs'
-import type { DetectProjectResult, ProjectKind } from './types.js'
+import type { DetectProjectResult, FrameworkDefinition } from './types.js'
 
-const metaFrameworks = [
+const frameworks = [
     {
         package: '@sveltejs/kit',
         adapter: '@wuchale/svelte',
         kind: 'sveltekit',
+        choosable: false,
+        overrides: ['svelte'],
     },
     {
         package: 'astro',
         adapter: '@wuchale/astro',
+        choosable: true,
         kind: 'astro',
     },
-] satisfies { package: string; adapter: string; kind: ProjectKind }[]
 
-const frameworks = [
     {
         package: 'svelte',
         adapter: '@wuchale/svelte',
+        choosable: true,
         kind: 'svelte',
     },
     {
         package: 'react',
         adapter: '@wuchale/jsx',
+        choosable: true,
         kind: 'react',
     },
     {
         package: 'solid-js',
         adapter: '@wuchale/jsx',
+        choosable: true,
         kind: 'solid-js',
     },
-] satisfies { package: string; adapter: string; kind: ProjectKind }[]
+] satisfies FrameworkDefinition[]
 
 function readPackageJson() {
     try {
@@ -43,10 +47,8 @@ function readPackageJson() {
 
 export function detectProject() {
     const result: DetectProjectResult = {
-        projectKind: 'vanilla',
-        detectedPackages: [],
-        adapters: [],
-        packageKinds: [],
+        packages: [],
+        packageOverrides: {},
         hasViteConfig: false,
         hasWuchaleConfig: false,
         isTypeScript: false,
@@ -55,39 +57,24 @@ export function detectProject() {
     const pkg = readPackageJson()
     if (!pkg) return null
 
-    const detectedPackages: string[] = []
-
     const deps: string[] = Object.keys(pkg.dependencies ?? {})
     const devDeps = Object.keys(pkg.devDependencies ?? {})
 
-    for (const fm of metaFrameworks) {
-        if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
-            result.projectKind = fm.kind
-            detectedPackages.push(fm.package)
-            result.adapters.push(fm.adapter)
-            if (fm.kind !== 'sveltekit') {
-                result.packageKinds.push(fm.kind)
-            }
-            break
-        }
-    }
-
     for (const fm of frameworks) {
         if (deps.includes(fm.package) || devDeps.includes(fm.package)) {
-            detectedPackages.push(fm.package)
-            result.packageKinds.push(fm.kind)
-            if (!result.adapters.includes(fm.adapter)) {
-                result.adapters.push(fm.adapter)
-            }
-            if (result.projectKind === 'vanilla') {
-                result.projectKind = fm.kind
+            result.packages.push({
+                kind: fm.kind,
+                choosable: fm.choosable,
+                adapter: fm.adapter,
+            })
+
+            if (fm.overrides) {
+                for (const override of fm.overrides) {
+                    result.packageOverrides[override] = fm.kind
+                }
             }
         }
     }
-
-    if (result.packageKinds.length === 0) result.packageKinds.push('vanilla')
-
-    result.detectedPackages = detectedPackages
 
     if (existsSync('vite.config.ts') || existsSync('vite.config.js')) {
         result.hasViteConfig = true
@@ -97,7 +84,7 @@ export function detectProject() {
         result.hasWuchaleConfig = true
     }
 
-    if (deps.includes('typescript') || devDeps.includes('typescript')) {
+    if (deps.includes('typescript') || devDeps.includes('typescript') || existsSync('tsconfig.json')) {
         result.isTypeScript = true
     }
 

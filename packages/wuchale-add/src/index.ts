@@ -20,20 +20,11 @@ if (!project) {
 
 const locales = await languagesPrompt()
 
-const confirmedAdapters: MultiboxPromptOptions[] = await adapterMultiboxPrompt(project.packageKinds)
+const choosablePackages = project.packages.filter(pkg => pkg.choosable)
 
-const zippedAdapters = project.adapters.map((adapter, index) => ({
-    adapter: adapter,
-    kind: project.packageKinds[index],
-}))
+const confirmedAdapters: MultiboxPromptOptions[] = await adapterMultiboxPrompt(choosablePackages)
 
-const adapters = [
-    ...new Set(
-        confirmedAdapters
-            .filter(adapt => adapt.checked)
-            .map(adapt => zippedAdapters.find(zipAdapt => zipAdapt.kind === adapt.name.toLowerCase())!.adapter),
-    ),
-]
+const adapters = [...new Set(confirmedAdapters.filter(adapt => adapt.checked).map(pkg => pkg.adapter))]
 
 const shouldInstall = await confirmPrompt('Install selected dependencies + wuchale package?')
 
@@ -63,15 +54,15 @@ if (shouldModifyFiles) {
         project,
         locales,
     }
-    for (const adapter of project.adapters) {
+    for (const adapter of confirmedAdapters) {
         try {
             const cwd = process.cwd()
             const require = createRequire(`${cwd}/package.json`)
-            const resolvedPath = require.resolve(`${adapter}/scaffold`)
+            const resolvedPath = require.resolve(`${adapter.adapter}/scaffold`)
             const module = (await import(resolvedPath)) as ScaffoldModule
             await module.scaffold(context)
         } catch (err) {
-            console.log(`Failed to scaffold for ${adapter}: ${err}`)
+            console.log(`Failed to scaffold for ${adapter.adapter}: ${err}`)
         }
     }
 }

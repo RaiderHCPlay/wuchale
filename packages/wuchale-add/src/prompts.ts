@@ -1,12 +1,13 @@
 import readline from 'node:readline'
-import type { MultiboxPromptOptions, ProjectKind } from './types.js'
+import type { MultiboxPromptOptions, ProjectPackage } from './types.js'
 
 const displayName = new Intl.DisplayNames(['en'], { type: 'language' })
 
-export function adapterMultiboxPrompt(adapters: ProjectKind[]): Promise<MultiboxPromptOptions[]> {
+export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<MultiboxPromptOptions[]> {
     return new Promise(resolve => {
-        const options: MultiboxPromptOptions[] = adapters.map(adapter => ({
-            name: adapter.charAt(0).toUpperCase() + adapter.slice(1),
+        const options: MultiboxPromptOptions[] = packages.map(pkg => ({
+            name: pkg.kind.charAt(0).toUpperCase() + pkg.kind.slice(1),
+            adapter: pkg.adapter,
             checked: true,
         }))
 

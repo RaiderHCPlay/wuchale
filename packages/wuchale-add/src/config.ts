@@ -11,13 +11,16 @@ export function writeWuchaleConfig(project: DetectProjectResult, locales: string
 
 function generateConfigContent(project: DetectProjectResult, locales: string[]) {
     const configs: AdapterConfig[] = []
-    for (const packageKind of project.packageKinds) {
-        if (project.projectKind === 'sveltekit' && packageKind === 'svelte') continue
-        configs.push(getAdapterConfig(packageKind, project.hasViteConfig))
-    }
+
     let adapterConfigs = ''
     let wuchaleConfigContent = '// @ts-check\n'
 
+    for (const pkg of project.packages) {
+        if (project.packageOverrides[pkg.kind]) {
+            continue
+        }
+        configs.push(getAdapterConfig(pkg.kind, project.hasViteConfig))
+    }
     const pairedConfigs: PairedAdapterConfig[] = configs.flatMap(conf =>
         conf.import.map((imp, index) => ({
             import: imp,
