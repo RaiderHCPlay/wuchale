@@ -6,7 +6,7 @@ import { detectProject } from './detect.js'
 import { writeGitignore } from './gitignore.js'
 import { detectPackageManager, installDependencies } from './install.js'
 import { adapterMultiboxPrompt, confirmPrompt, languagesPrompt } from './prompts.js'
-import type { DetectProjectResult, MultiboxPromptOptions, PackageManager, ScaffoldModule } from './types.js'
+import type { DetectProjectResult, PackageManager, ScaffoldModule } from './types.js'
 import { writeViteConfig } from './vite.js'
 
 console.log(`Wuchale-add CLI ${pkg.version}`)
@@ -22,9 +22,11 @@ const locales = await languagesPrompt()
 
 const choosablePackages = project.packages.filter(pkg => pkg.choosable)
 
-const confirmedAdapters: MultiboxPromptOptions[] = await adapterMultiboxPrompt(choosablePackages)
+const confirmedAdapters = await adapterMultiboxPrompt(choosablePackages)
 
-const adapters = [...new Set(confirmedAdapters.filter(adapt => adapt.checked).map(pkg => pkg.adapter))]
+const selectedAdapters = confirmedAdapters.filter(adapt => adapt.checked)
+
+const adapters = selectedAdapters.map(pkg => pkg.adapter)
 
 const shouldInstall = await confirmPrompt('Install selected dependencies + wuchale package?')
 
@@ -54,10 +56,11 @@ if (shouldModifyFiles) {
         project,
         locales,
     }
-    for (const adapter of confirmedAdapters) {
+    const cwd = process.cwd()
+    const require = createRequire(`${cwd}/package.json`)
+
+    for (const adapter of selectedAdapters) {
         try {
-            const cwd = process.cwd()
-            const require = createRequire(`${cwd}/package.json`)
             const resolvedPath = require.resolve(`${adapter.adapter}/scaffold`)
             const module = (await import(resolvedPath)) as ScaffoldModule
             await module.scaffold(context)

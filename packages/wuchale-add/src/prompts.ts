@@ -20,11 +20,20 @@ const ANSI = {
 
 export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<MultiboxPromptOptions[]> {
     return new Promise(resolve => {
-        const options: MultiboxPromptOptions[] = packages.map(pkg => ({
-            name: pkg.kind.charAt(0).toUpperCase() + pkg.kind.slice(1),
-            adapter: pkg.adapter,
-            checked: true,
-        }))
+        const options = packages.reduce<MultiboxPromptOptions[]>((opts, pkg) => {
+            const name = pkg.kind.charAt(0).toUpperCase() + pkg.kind.slice(1)
+            const existing = opts.find(option => option.adapter === pkg.adapter)
+            if (existing) {
+                existing.name += `/${name}`
+            } else {
+                opts.push({
+                    name,
+                    adapter: pkg.adapter,
+                    checked: true,
+                })
+            }
+            return opts
+        }, [])
 
         if (options.length === 0) {
             resolve([])
