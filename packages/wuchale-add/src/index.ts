@@ -6,15 +6,16 @@ import { detectProject } from './detect.js'
 import { writeGitignore } from './gitignore.js'
 import { detectPackageManager, installDependencies } from './install.js'
 import { adapterMultiboxPrompt, confirmPrompt, languagesPrompt } from './prompts.js'
+import { errorText, STYLE, style, successText } from './style.js'
 import type { DetectProjectResult, PackageManager, ScaffoldModule } from './types.js'
 import { writeViteConfig } from './vite.js'
 
-console.log(`Wuchale-add CLI ${pkg.version}`)
+console.log(style(`Wuchale-add CLI ${pkg.version}`, STYLE.BLUE, STYLE.BOLD))
 
 const project: DetectProjectResult | null = detectProject()
 
 if (!project) {
-    console.error('No package.json file found. Are you in a project directory?')
+    console.error(errorText('No package.json file found. Are you in a project directory?'))
     process.exit(1)
 }
 
@@ -36,11 +37,11 @@ if (shouldInstall) {
     } else {
         try {
             await installDependencies(adapters)
-            console.log('Dependencies installed')
+            console.log(successText('Dependencies installed'))
         } catch (error) {
-            console.error(`${error} Try manually:`)
+            console.error(errorText(`${error} Try manually:`))
             const pkgMgr: PackageManager = detectPackageManager()
-            console.error(`\t${pkgMgr.name} ${pkgMgr.install} wuchale ${adapters.join(' ')}`)
+            console.error(errorText(`\t${pkgMgr.name} ${pkgMgr.install} wuchale ${adapters.join(' ')}`))
         }
     }
 }
@@ -65,7 +66,9 @@ if (shouldModifyFiles) {
             const module = (await import(resolvedPath)) as ScaffoldModule
             await module.scaffold(context)
         } catch (err) {
-            console.log(`Failed to scaffold for ${adapter.adapter}: ${err}`)
+            console.log(errorText(`Failed to scaffold for ${adapter.adapter}: ${err}`))
         }
     }
 }
+
+console.log(style(`Done!`, STYLE.BLUE, STYLE.BOLD))
