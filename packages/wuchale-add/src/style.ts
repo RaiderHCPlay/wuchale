@@ -8,6 +8,8 @@ export const STYLE = {
     GREEN: '\x1b[32m',
     BLUE: '\x1b[38;2;128;220;209m',
     DARK: '\x1b[38;2;24;42;47m',
+    COMMAND: '\x1b[38;2;255;198;109m',
+    WEBSITE: '\x1b[38;2;198;160;255m',
 }
 
 export function style(text: string, ...styles: string[]) {

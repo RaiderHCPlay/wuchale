@@ -71,4 +71,6 @@ if (shouldModifyFiles) {
     }
 }
 
-console.log(style(`Done!`, STYLE.BLUE, STYLE.BOLD))
+console.log(style(`Wuchale setup complete`, STYLE.BLUE, STYLE.BOLD))
+console.log(`Run ${style("'npx wuchale'", STYLE.COMMAND)} for initial extract`)
+console.log(`Visit the wuchale docs at ${style('https://wuchale.dev/', STYLE.WEBSITE)} for full configuration`)
