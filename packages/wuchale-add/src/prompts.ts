@@ -14,8 +14,6 @@ const KEY = {
 const ANSI = {
     HIDE_CURSOR: '\x1b[?25l',
     SHOW_CURSOR: '\x1b[?25h',
-    RESTORE_CURSOR: '\x1b[u',
-    SAVE_CURSOR: '\x1b[s',
 }
 
 export function adapterMultiboxPrompt(packages: ProjectPackage[]): Promise<MultiboxPromptOptions[]> {
@@ -112,19 +110,23 @@ export function languagesPrompt(): Promise<string[]> {
 
         const render = (error = '') => {
             if (rendered) {
-                process.stdout.write(ANSI.RESTORE_CURSOR)
-                readline.moveCursor(process.stdout, 0, -1)
+                const cursorLines = 1
+                readline.moveCursor(process.stdout, 0, -cursorLines)
+                readline.cursorTo(process.stdout, 0)
+
                 readline.clearScreenDown(process.stdout)
             }
 
             rendered = true
 
             process.stdout.write('Which languages do you want to support? (e.g. en,zh-TW)\n')
-            process.stdout.write(ANSI.SAVE_CURSOR)
 
-            process.stdout.write(`> ${input}`)
-            if (error) process.stdout.write(`\n${error}`)
+            process.stdout.write(`> ${input}\n`)
+            if (error) process.stdout.write(`${error}`)
+
             readline.cursorTo(process.stdout, input.length + 2)
+
+            readline.moveCursor(process.stdout, 0, -1)
         }
 
         const cleanup = () => {
@@ -157,6 +159,7 @@ export function languagesPrompt(): Promise<string[]> {
                     input = input.slice(0, -1)
                     break
                 default:
+                    if (key.startsWith('\u001b')) break
                     input += key
             }
 
@@ -180,15 +183,13 @@ export function confirmPrompt(text: string): Promise<boolean> {
 
         const render = (error = '') => {
             if (rendered) {
-                process.stdout.write(ANSI.RESTORE_CURSOR)
-                readline.moveCursor(process.stdout, 0, -1)
-
+                readline.cursorTo(process.stdout, 0)
+                readline.moveCursor(process.stdout, 0, 0)
                 readline.clearScreenDown(process.stdout)
             }
             rendered = true
 
             process.stdout.write(`${text}(Y/N): ${input}\n`)
-            process.stdout.write(ANSI.SAVE_CURSOR)
 
             if (error) process.stdout.write(`${error}`)
 
@@ -227,6 +228,7 @@ export function confirmPrompt(text: string): Promise<boolean> {
                     break
 
                 default:
+                    if (key.startsWith('\u001b')) break
                     input += key
             }
             render()
