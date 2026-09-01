@@ -43,6 +43,9 @@
         "./runtime.svelte": {
             "types": "./src/runtime.d.ts",
             "default": "./src/runtime.svelte"
+        },
+        "./scaffold": {
+            "default": "./src/scaffold.js"
         }
     },
     "repository": {
