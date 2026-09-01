@@ -45,7 +45,7 @@
             "default": "./src/runtime.svelte"
         },
         "./scaffold": {
-            "default": "./src/scaffold.js"
+            "default": "./dist/scaffold.js"
         }
     },
     "repository": {

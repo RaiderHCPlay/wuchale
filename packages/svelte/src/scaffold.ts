@@ -58,8 +58,7 @@ function scaffoldSvelteKit(ext: string, locale: string) {
 }
 
 function generateHooksConfig(isTs: boolean, locale: string): string {
-    return `
-import * as svelte from './locales/svelte.loader.server.svelte.js'
+    return `import * as svelte from './locales/svelte.loader.server.svelte.js'
 import * as js from './locales/js.loader.server.js'
 import { runWithLocale, loadLocales } from 'wuchale/load-utils/server';
 import { locales } from './locales/data.js'
@@ -68,7 +67,7 @@ ${isTs ? "import type { Handle } from '@sveltejs/kit';" : ''}
 loadLocales(svelte.key, svelte.loadCount, svelte.loadCatalog, locales)
 loadLocales(js.key, js.loadCount, js.loadCatalog, locales)
 
-export const handle ${isTs ? ': Handle' : ''} = async ({ event, resolve }) => {
+export const handle${isTs ? ': Handle' : ''} = async ({ event, resolve }) => {
     const locale = event.url.searchParams.get('locale') ?? '${locale}'
     return await runWithLocale(locale, () => resolve(event))
 }
@@ -76,8 +75,7 @@ export const handle ${isTs ? ': Handle' : ''} = async ({ event, resolve }) => {
 }
 
 function generateLayoutConfig(isTs: boolean, locale: string): string {
-    return `
-${isTs ? "import type { LayoutLoad } from './$types';" : ''}
+    return `${isTs ? "import type { LayoutLoad } from './$types';" : ''}
 import '../locales/js.loader.js';
 import '../locales/svelte.loader.svelte.js';
 import { loadLocale } from 'wuchale/load-utils';
