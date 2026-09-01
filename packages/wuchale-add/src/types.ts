@@ -6,6 +6,7 @@ export interface DetectProjectResult {
     packageOverrides: Partial<Record<ProjectKind, ProjectKind>>
     hasViteConfig: boolean
     hasWuchaleConfig: boolean
+    hasTailwind: boolean
     isTypeScript: boolean
 }
 

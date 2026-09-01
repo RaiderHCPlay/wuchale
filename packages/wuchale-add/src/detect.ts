@@ -50,6 +50,7 @@ export function detectProject() {
         packages: [],
         packageOverrides: {},
         hasViteConfig: false,
+        hasTailwind: false,
         hasWuchaleConfig: false,
         isTypeScript: false,
     }
@@ -86,6 +87,10 @@ export function detectProject() {
 
     if (deps.includes('typescript') || devDeps.includes('typescript') || existsSync('tsconfig.json')) {
         result.isTypeScript = true
+    }
+
+    if (deps.includes('tailwindcss') || devDeps.includes('tailwindcss')) {
+        result.hasTailwind = true
     }
 
     return result
