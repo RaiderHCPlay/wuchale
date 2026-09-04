@@ -61,26 +61,10 @@ function scaffoldSvelteKit(ext: string, locale: string) {
     writeFileSync(hooksFile.file, transformHooksFile(hooksFile, locale))
 
     if (!existsSync(layoutFile.file)) {
-        writeFileSync(layoutFile.file, generateLayoutConfig(layoutFile.isTs, locale))
+        writeFileSync(layoutFile.file, '')
     }
-}
 
-function generateLayoutConfig(isTs: boolean, locale: string): string {
-    return `${isTs ? "import type { LayoutLoad } from './$types'" : ''}
-import '../locales/js.loader.js'
-import '../locales/svelte.loader.svelte.js'
-import { loadLocale } from 'wuchale/load-utils'
-import { browser } from '$app/environment'
-import { locales, type Locale } from '../locales/data.js'
-
-
-export const load${isTs ? ': LayoutLoad' : ''} = async ({url}) => {
-    const locale = url.searchParams.get('locale') ?? '${locale}'
-    if (browser && locales.includes(locale ${isTs ? 'as Locale' : ''})) {
-        await loadLocale(locale)
-    }
-}
-`
+    writeFileSync(layoutFile.file, transformLayoutFile(layoutFile, locale))
 }
 
 function transformHooksFile(hooksFile: { file: string; isTs: boolean }, locale: string): string {
@@ -124,11 +108,11 @@ function transformHooksFile(hooksFile: { file: string; isTs: boolean }, locale: 
     }
 
     if (!content.includes('loadLocales(svelte.key')) {
-        s.append('\nloadLocales(svelte.key, svelte.loadIDs, svelte.loadCatalog, locales)')
+        s.append('\nloadLocales(svelte.key, svelte.loadCount, svelte.loadCatalog, locales)')
     }
 
     if (!content.includes('loadLocales(js.key')) {
-        s.append('\nloadLocales(js.key, js.loadIDs, js.loadCatalog, locales)\n')
+        s.append('\nloadLocales(js.key, js.loadCount, js.loadCatalog, locales)\n')
     }
 
     const handleNode = findHandleNode(ast)
@@ -187,6 +171,117 @@ function transformHooksFile(hooksFile: { file: string; isTs: boolean }, locale: 
     return s.toString()
 }
 
+function transformLayoutFile(layoutFile: { file: string; isTs: boolean }, locale: string): string {
+    const content = readFileSync(layoutFile.file, 'utf8')
+    const ast = parser.parse(content, { ecmaVersion: 'latest', sourceType: 'module' })
+    const s = new MagicString(content)
+
+    const lastImportEnd = getLastImportEnd(ast)
+    isFirstImport = lastImportEnd !== 0
+    const imports = [
+        {
+            imports: `{ ${layoutFile.isTs ? 'type Locale, ' : ''}locales }`,
+            from: '../locales/data.js',
+        },
+        {
+            imports: '{ browser }',
+            from: '$app/environment',
+        },
+        {
+            imports: '{ loadLocale }',
+            from: 'wuchale/load-utils',
+        },
+        {
+            from: '../locales/js.loader.js',
+        },
+        {
+            from: '../locales/svelte.loader.svelte.js',
+        },
+    ]
+
+    if (layoutFile.isTs) {
+        imports.push({
+            imports: 'type { LayoutLoad }',
+            from: './$types',
+        })
+    }
+
+    for (const impt of imports) {
+        addImport(ast, s, lastImportEnd, impt)
+    }
+
+    const loadNode = ast.body.find(node => {
+        if (node.type !== 'ExportNamedDeclaration') return undefined
+
+        if (node.declaration?.type === 'VariableDeclaration') {
+            return node.declaration.declarations.some((d: any) => d.id?.name === 'load')
+        }
+
+        return undefined
+    }) as any
+
+    if (!loadNode) {
+        s.append(`export const load${layoutFile.isTs ? ': LayoutLoad' : ''} = async ({url}) => {
+    const locale = url.searchParams.get('locale') ?? '${locale}'
+    if (browser && locales.includes(locale ${layoutFile.isTs ? 'as Locale' : ''})) {
+        await loadLocale(locale)
+    }
+}`)
+    } else {
+        const loadDeclaration = loadNode.declaration.declarations.find((node: any) => {
+            if (node.id.name === 'load') return node
+            return undefined
+        })
+
+        if (layoutFile.isTs && !content.includes(': LayoutLoad')) {
+            s.appendRight(loadDeclaration.id.end, ': LayoutLoad')
+        }
+        const loadParameters = loadDeclaration.init.params
+        let argsStart: number
+
+        if (loadParameters.length > 0) {
+            argsStart = loadParameters[0].start
+        } else {
+            const arrowStart = content.indexOf('=>', loadDeclaration.init.start)
+            argsStart = content.lastIndexOf('(', arrowStart)
+            argsStart++
+        }
+
+        let hasUrl: boolean = false
+
+        if (!loadParameters || loadParameters.length === 0) {
+            s.appendRight(argsStart, '{ url }')
+            hasUrl = true
+        }
+
+        for (const param of loadParameters) {
+            for (const prop of param.properties) {
+                if (prop.key.name === 'url') {
+                    hasUrl = true
+                    break
+                }
+            }
+            if (hasUrl) break
+        }
+
+        if (!hasUrl) {
+            s.appendLeft(++argsStart, ` url,`)
+        }
+
+        const block = loadDeclaration.init.body
+
+        if (!content.includes('const locale = url.searchParams.get')) {
+            const localeDecl = `\nconst locale = url.searchParams.get('locale') ?? '${locale}';\n`
+            const ifStatement = `if (browser && locales.includes(locale ${
+                layoutFile.isTs ? 'as Locale' : ''
+            })) { await loadLocale(locale); }\n`
+            s.appendRight(++block.start, `${localeDecl}${ifStatement}`)
+        }
+    }
+
+    return s.toString()
+}
+
 function getLastImportEnd(ast: Program): number {
     for (const [i, node] of ast.body.entries()) {
         if (node.type === 'ImportDeclaration' && ast.body[i + 1]?.type !== 'ImportDeclaration') {
@@ -196,7 +291,7 @@ function getLastImportEnd(ast: Program): number {
     return 0
 }
 
-function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { imports: string; from: string }) {
+function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { imports?: string; from: string }) {
     let imptFound = false
     for (const node of ast.body) {
         if (node.type === 'ImportDeclaration') {
@@ -207,7 +302,10 @@ function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { 
     }
 
     if (!imptFound) {
-        s.appendLeft(lastImportEnd, `${isFirstImport ? '\n' : ''}import ${impt.imports} from '${impt.from}'\n`)
+        s.appendLeft(
+            lastImportEnd,
+            `${isFirstImport ? '\n' : ''}import ${impt.imports ? `${impt.imports} from ` : ''}'${impt.from}'\n`,
+        )
         isFirstImport = false
     }
 }
@@ -262,8 +360,8 @@ function generateTailwind(isKit: boolean) {
 
     const content = readFileSync(stylesheetFile, 'utf8')
 
-    if (!content.includes('@source not "../locales/";')) {
-        const newContent = `@source not "../locales/"\n${content}`
+    if (!content.includes('@source not "../locales/"')) {
+        const newContent = `@source not "../locales/"\n${content};`
         writeFileSync(stylesheetFile, newContent)
     }
 }
