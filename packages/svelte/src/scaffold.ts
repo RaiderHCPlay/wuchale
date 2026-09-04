@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { tsPlugin } from '@sveltejs/acorn-typescript'
+import { type Node, Parser, type Program } from 'acorn'
 import MagicString from 'magic-string'
+import { type AST, parse } from 'svelte/compiler'
 
 interface DetectProjectResult {
     packages: {
@@ -16,6 +19,9 @@ interface ScaffoldContext {
     project: DetectProjectResult
     locales: string[]
 }
+
+const parser = Parser.extend(tsPlugin())
+let isFirstImport = true
 
 export async function scaffold(ctx: ScaffoldContext) {
     const isKit = ctx.project.packages.some(p => p.kind === 'sveltekit')
@@ -49,38 +55,23 @@ function scaffoldSvelteKit(ext: string, locale: string) {
     }
 
     if (!existsSync(hooksFile.file)) {
-        writeFileSync(hooksFile.file, generateHooksConfig(hooksFile.isTs, locale))
+        writeFileSync(hooksFile.file, '')
     }
+
+    writeFileSync(hooksFile.file, transformHooksFile(hooksFile, locale))
 
     if (!existsSync(layoutFile.file)) {
         writeFileSync(layoutFile.file, generateLayoutConfig(layoutFile.isTs, locale))
     }
 }
 
-function generateHooksConfig(isTs: boolean, locale: string): string {
-    return `import * as svelte from './locales/svelte.loader.server.svelte.js'
-import * as js from './locales/js.loader.server.js'
-import { runWithLocale, loadLocales } from 'wuchale/load-utils/server';
-import { locales } from './locales/data.js'
-${isTs ? "import type { Handle } from '@sveltejs/kit';" : ''}
-
-loadLocales(svelte.key, svelte.loadCount, svelte.loadCatalog, locales)
-loadLocales(js.key, js.loadCount, js.loadCatalog, locales)
-
-export const handle${isTs ? ': Handle' : ''} = async ({ event, resolve }) => {
-    const locale = event.url.searchParams.get('locale') ?? '${locale}'
-    return await runWithLocale(locale, () => resolve(event))
-}
-`
-}
-
 function generateLayoutConfig(isTs: boolean, locale: string): string {
-    return `${isTs ? "import type { LayoutLoad } from './$types';" : ''}
-import '../locales/js.loader.js';
-import '../locales/svelte.loader.svelte.js';
-import { loadLocale } from 'wuchale/load-utils';
-import { browser } from '$app/environment';
-import { locales, type Locale } from '../locales/data.js';
+    return `${isTs ? "import type { LayoutLoad } from './$types'" : ''}
+import '../locales/js.loader.js'
+import '../locales/svelte.loader.svelte.js'
+import { loadLocale } from 'wuchale/load-utils'
+import { browser } from '$app/environment'
+import { locales, type Locale } from '../locales/data.js'
 
 
 export const load${isTs ? ': LayoutLoad' : ''} = async ({url}) => {
@@ -90,6 +81,166 @@ export const load${isTs ? ': LayoutLoad' : ''} = async ({url}) => {
     }
 }
 `
+}
+
+function transformHooksFile(hooksFile: { file: string; isTs: boolean }, locale: string): string {
+    const content = readFileSync(hooksFile.file, 'utf8')
+    const ast = parser.parse(content, {
+        sourceType: 'module',
+        ecmaVersion: 'latest',
+    })
+    const s = new MagicString(content)
+
+    const lastImportEnd = getLastImportEnd(ast)
+    isFirstImport = lastImportEnd !== 0
+    const imports = [
+        {
+            imports: '* as svelte',
+            from: './locales/svelte.loader.server.svelte.js',
+        },
+        {
+            imports: '* as js',
+            from: './locales/js.loader.server.js',
+        },
+        {
+            imports: '{ runWithLocale, loadLocales }',
+            from: 'wuchale/load-utils/server',
+        },
+        {
+            imports: '{ locales }',
+            from: './locales/data.js',
+        },
+    ]
+
+    if (hooksFile.isTs) {
+        imports.push({
+            imports: 'type { Handle }',
+            from: '@sveltejs/kit',
+        })
+    }
+
+    for (const impt of imports) {
+        addImport(ast, s, lastImportEnd, impt)
+    }
+
+    if (!content.includes('loadLocales(svelte.key')) {
+        s.append('\nloadLocales(svelte.key, svelte.loadIDs, svelte.loadCatalog, locales)')
+    }
+
+    if (!content.includes('loadLocales(js.key')) {
+        s.append('\nloadLocales(js.key, js.loadIDs, js.loadCatalog, locales)\n')
+    }
+
+    const handleNode = findHandleNode(ast)
+    const sequenceNode = findSequenceNode(ast)
+    const handleName = handleNode || sequenceNode ? 'i18n' : 'handle'
+
+    if (handleNode && !content.includes('await runWithLocale')) {
+        s.replace(/\bexport\b\s+(async\s+)?function\s+handle\b/g, '$1function handler')
+        s.replace(/\bexport\b\s+const\s+handle\b/g, 'const handler')
+    }
+
+    if (!content.includes('export const i18n') && !content.includes('await runWithLocale')) {
+        s.append(`\n${handleNode ? '' : 'export '}const ${handleName}${hooksFile.isTs ? ': Handle' : ''} = async ({ event, resolve }) => {
+    const locale = event.url.searchParams.get('locale') ?? '${locale}'
+    return await runWithLocale(locale, () => resolve(event))
+}\n`)
+    }
+
+    if (
+        !sequenceNode &&
+        handleNode &&
+        !content.includes('sequence(handler') &&
+        !content.includes('await runWithLocale')
+    ) {
+        addImport(ast, s, lastImportEnd, {
+            from: '@sveltejs/kit/hooks',
+            imports: '{ sequence }',
+        })
+
+        s.append('\nexport const handle = sequence(handler, i18n)')
+    }
+
+    if (sequenceNode) {
+        const sequenceArgs = sequenceNode.declaration?.declarations?.[0]?.init.arguments
+        const hasI18nArg = sequenceArgs.some((arg: any) => arg.type === 'Identifier' && arg.name === 'i18n')
+        if (!hasI18nArg) {
+            sequenceArgs.push({
+                type: 'Identifier',
+                name: 'i18n',
+                start: 0,
+                end: 0,
+            })
+        }
+
+        const argNames = sequenceArgs.map((arg: any) => arg.name).join(', ')
+
+        const index = ast.body.indexOf(sequenceNode)
+        ast.body.splice(index, 1)
+
+        s.replace(
+            /\bexport\s+const\s+handle\s+=\s+sequence\s*\([^)]*\)/g,
+            `export const handle = sequence(${argNames})`,
+        )
+    }
+
+    return s.toString()
+}
+
+function getLastImportEnd(ast: Program): number {
+    for (const [i, node] of ast.body.entries()) {
+        if (node.type === 'ImportDeclaration' && ast.body[i + 1]?.type !== 'ImportDeclaration') {
+            return node.end
+        }
+    }
+    return 0
+}
+
+function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { imports: string; from: string }) {
+    let imptFound = false
+    for (const node of ast.body) {
+        if (node.type === 'ImportDeclaration') {
+            if (node.source.value === impt.from) {
+                imptFound = true
+            }
+        }
+    }
+
+    if (!imptFound) {
+        s.appendLeft(lastImportEnd, `${isFirstImport ? '\n' : ''}import ${impt.imports} from '${impt.from}'\n`)
+        isFirstImport = false
+    }
+}
+
+function findHandleNode(ast: Program) {
+    return ast.body.find((node: any) => {
+        if (node.type !== 'ExportNamedDeclaration') return undefined
+
+        if (node.declaration?.type === 'VariableDeclaration') {
+            return node.declaration.declarations.find(
+                (d: any) => d.id?.name === 'handle' && d.init?.callee?.name !== 'sequence',
+            )
+        }
+
+        if (node.declaration?.type === 'FunctionDeclaration') {
+            return node.declaration.id.name === 'handle'
+        }
+
+        return undefined
+    }) as Node
+}
+
+function findSequenceNode(ast: Program) {
+    return ast.body.find((node: any) => {
+        if (node.type !== 'ExportNamedDeclaration') return false
+        if (node.declaration?.type === 'VariableDeclaration') {
+            return node.declaration?.declarations.some(
+                (d: any) =>
+                    d.id?.name === 'handle' && d.init?.type === 'CallExpression' && d.init?.callee?.name === 'sequence',
+            )
+        }
+        return false
+    }) as any
 }
 
 // Plain Svelte transformations
