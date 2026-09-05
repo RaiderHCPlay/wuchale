@@ -3,16 +3,18 @@ import path from 'node:path'
 import { tsPlugin } from '@sveltejs/acorn-typescript'
 import { type Node, Parser, type Program } from 'acorn'
 import MagicString from 'magic-string'
-import { type AST, parse } from 'svelte/compiler'
+import { type AST, compile, compileModule, parse, print } from 'svelte/compiler'
 
 interface DetectProjectResult {
-    packages: {
-        kind: string
-        adapter: string
-        choosable: boolean
-    }[]
+    packages: Packages[]
     hasTailwind: boolean
     isTypeScript: boolean
+}
+
+interface Packages {
+    kind: string
+    adapter: string
+    choosable: boolean
 }
 
 interface ScaffoldContext {
@@ -32,7 +34,7 @@ export async function scaffold(ctx: ScaffoldContext) {
     if (isKit) {
         scaffoldSvelteKit(ext, locale)
     } else {
-        // scaffoldPlainSvelte(isTs, ext, hasTailcss, locale)
+        scaffoldPlainSvelte(locale, ctx.project.packages)
     }
 
     if (hasTailcss) {
@@ -282,34 +284,6 @@ function transformLayoutFile(layoutFile: { file: string; isTs: boolean }, locale
     return s.toString()
 }
 
-function getLastImportEnd(ast: Program): number {
-    for (const [i, node] of ast.body.entries()) {
-        if (node.type === 'ImportDeclaration' && ast.body[i + 1]?.type !== 'ImportDeclaration') {
-            return node.end
-        }
-    }
-    return 0
-}
-
-function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { imports?: string; from: string }) {
-    let imptFound = false
-    for (const node of ast.body) {
-        if (node.type === 'ImportDeclaration') {
-            if (node.source.value === impt.from) {
-                imptFound = true
-            }
-        }
-    }
-
-    if (!imptFound) {
-        s.appendLeft(
-            lastImportEnd,
-            `${isFirstImport ? '\n' : ''}import ${impt.imports ? `${impt.imports} from ` : ''}'${impt.from}'\n`,
-        )
-        isFirstImport = false
-    }
-}
-
 function findHandleNode(ast: Program) {
     return ast.body.find((node: any) => {
         if (node.type !== 'ExportNamedDeclaration') return undefined
@@ -341,8 +315,122 @@ function findSequenceNode(ast: Program) {
     }) as any
 }
 
+function getLastImportEnd(ast: Program): number {
+    for (const [i, node] of ast.body.entries()) {
+        if (node.type === 'ImportDeclaration' && ast.body[i + 1]?.type !== 'ImportDeclaration') {
+            return node.end
+        }
+    }
+    return 0
+}
+
+function addImport(ast: Program, s: MagicString, lastImportEnd: number, impt: { imports?: string; from: string }) {
+    let imptFound = false
+    for (const node of ast.body) {
+        if (node.type === 'ImportDeclaration') {
+            if (node.source.value === impt.from) {
+                imptFound = true
+            }
+        }
+    }
+
+    if (!imptFound) {
+        s.appendLeft(
+            lastImportEnd,
+            `${isFirstImport ? '\n' : ''}import ${impt.imports ? `${impt.imports} from ` : ''}'${impt.from}'\n`,
+        )
+        isFirstImport = false
+    }
+}
+
 // Plain Svelte transformations
-// function scaffoldPlainSvelte(isTs: boolean, ext: string, hasTailcss: boolean, locale: string) {}
+function scaffoldPlainSvelte(locale: string, packages: Packages[]) {
+    if (!existsSync('src')) {
+        mkdirSync('src')
+    }
+
+    if (!existsSync('src/App.svelte')) {
+        writeFileSync('src/App.svelte', '')
+    }
+
+    writeFileSync('src/App.svelte', transformPlainSvelte(locale, packages))
+}
+
+function transformPlainSvelte(locale: string, packages: Packages[]): string {
+    const content = readFileSync('src/App.svelte', 'utf8')
+    const ast = parse(content, { modern: true })
+    const imports = [
+        {
+            imports: '{ loadLocale }',
+            from: 'wuchale/load-utils',
+        },
+        {
+            from: `./locales/${packages.length > 1 ? 'svelte' : 'main'}.loader.svelte.js`,
+        },
+    ]
+
+    let scriptContentString = '<script>'
+
+    for (const impt of imports) {
+        const exists = checkImport(ast, impt)
+
+        if (!exists) {
+            scriptContentString += `import ${impt.imports ? `${impt.imports} from ` : ''}'${impt.from}'\n`
+        }
+    }
+    if (!content?.includes('let locale = $state')) {
+        scriptContentString += `let locale = $state('${locale}')`
+    }
+
+    scriptContentString += '</script>'
+
+    const injectedScript = parse(scriptContentString, { modern: true })
+    const injectedContent = injectedScript.instance?.content.body
+    if (injectedContent) ast.instance?.content.body.push(...injectedContent)
+
+    if (!content?.includes('#await loadLocale')) {
+        const nodes = ast.fragment.nodes
+
+        const existingHtml: string[] = []
+        for (const node of nodes) {
+            const element = content.slice(node.start, node.end)
+            existingHtml.push(element)
+        }
+
+        ast.fragment.nodes = []
+
+        const newHTML = `{#await loadLocale(locale)}
+            	<!-- Ignored because it is rendered before the catalog is loaded -->
+            	<!-- @wc-ignore -->
+        	Loading translations...
+        {:then}
+        ${existingHtml
+            .join('')
+            .split('\n')
+            .map(line => `\t${line}`)
+            .join('\n')}
+        {/await}`
+
+        const newHTMLParse = parse(newHTML, { modern: true })
+        const htmlBody = newHTMLParse.fragment.nodes
+        ast.fragment.nodes.push(...htmlBody)
+    }
+    return print(ast).code
+}
+
+function checkImport(ast: AST.Root, impt: { imports?: string; from: string }) {
+    let imptFound = false
+    const body = ast.instance?.content.body ?? []
+    for (const node of body) {
+        if (node.type === 'ImportDeclaration') {
+            if (node.source.value === impt.from) {
+                imptFound = true
+            }
+        }
+    }
+
+    return imptFound
+}
 
 // Tailwind
 function generateTailwind(isKit: boolean) {
