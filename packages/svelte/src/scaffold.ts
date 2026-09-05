@@ -3,7 +3,7 @@ import path from 'node:path'
 import { tsPlugin } from '@sveltejs/acorn-typescript'
 import { type Node, Parser, type Program } from 'acorn'
 import MagicString from 'magic-string'
-import { type AST, compile, compileModule, parse, print } from 'svelte/compiler'
+import { type AST, parse, print } from 'svelte/compiler'
 
 interface DetectProjectResult {
     packages: Packages[]
